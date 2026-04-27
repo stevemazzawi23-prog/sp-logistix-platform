@@ -31,6 +31,7 @@ import {
   BarChart3,
   Settings,
   Truck,
+  UserCog,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -50,6 +51,7 @@ const allMenuItems: MenuItem[] = [
   { icon: BarChart3, label: "Rapports", path: "/reports" },
   { icon: Users, label: "Clients", path: "/admin/clients", adminOnly: true },
   { icon: Truck, label: "Tous les tickets", path: "/admin/tickets", adminOnly: true },
+  { icon: UserCog, label: "Comptes", path: "/admin/users", adminOnly: true },
   { icon: Settings, label: "Paramètres", path: "/admin/settings", adminOnly: true },
 ];
 

@@ -7,8 +7,11 @@ import {
   getAllClients, getClientById, getClientByUserId, createClient, updateClient, deleteClient,
   getContactsByClientId, createContact, updateContact, deleteContact,
   getTicketsByClientId, getTicketsByClientIdAndMonth, createDeliveryTicket, getAllTickets,
-  getMonthlyReportsByClientId, upsertMonthlyReport
+  getMonthlyReportsByClientId, upsertMonthlyReport,
+  getUserByEmail, createUserWithPassword, updateUserPassword, updateUserRole, deleteUser, getAllUsers
 } from "./db";
+import bcrypt from "bcryptjs";
+import { sdk } from "./_core/sdk";
 import { TRPCError } from "@trpc/server";
 
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -24,6 +27,87 @@ export const appRouter = router({
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
+    }),
+    login: publicProcedure.input(z.object({
+      email: z.string().email(),
+      password: z.string().min(1),
+    })).mutation(async ({ input, ctx }) => {
+      const user = await getUserByEmail(input.email.toLowerCase().trim());
+      if (!user || !user.passwordHash) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Email ou mot de passe incorrect' });
+      }
+      const valid = await bcrypt.compare(input.password, user.passwordHash);
+      if (!valid) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Email ou mot de passe incorrect' });
+      }
+      const token = await sdk.createSessionToken(user.openId, { name: user.name || '' });
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
+      return { success: true, mustChangePassword: user.mustChangePassword === 1 };
+    }),
+    changePassword: protectedProcedure.input(z.object({
+      currentPassword: z.string().min(1),
+      newPassword: z.string().min(6),
+    })).mutation(async ({ input, ctx }) => {
+      if (!ctx.user.passwordHash) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Ce compte ne supporte pas le changement de mot de passe' });
+      }
+      const valid = await bcrypt.compare(input.currentPassword, ctx.user.passwordHash);
+      if (!valid) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Mot de passe actuel incorrect' });
+      }
+      const hash = await bcrypt.hash(input.newPassword, 12);
+      await updateUserPassword(ctx.user.id, hash, 0);
+      return { success: true };
+    }),
+  }),
+
+  // ============ USER MANAGEMENT (ADMIN) ============
+  users: router({
+    list: adminProcedure.query(async () => {
+      return getAllUsers();
+    }),
+    create: adminProcedure.input(z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+      password: z.string().min(6),
+      role: z.enum(['user', 'admin']).default('user'),
+    })).mutation(async ({ input }) => {
+      const existing = await getUserByEmail(input.email.toLowerCase().trim());
+      if (existing) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Un compte avec cet email existe déjà' });
+      }
+      const hash = await bcrypt.hash(input.password, 12);
+      const id = await createUserWithPassword({
+        name: input.name,
+        email: input.email.toLowerCase().trim(),
+        passwordHash: hash,
+        role: input.role,
+        mustChangePassword: 1,
+      });
+      return { id, success: true };
+    }),
+    resetPassword: adminProcedure.input(z.object({
+      id: z.number(),
+      newPassword: z.string().min(6),
+    })).mutation(async ({ input }) => {
+      const hash = await bcrypt.hash(input.newPassword, 12);
+      await updateUserPassword(input.id, hash, 1);
+      return { success: true };
+    }),
+    updateRole: adminProcedure.input(z.object({
+      id: z.number(),
+      role: z.enum(['user', 'admin']),
+    })).mutation(async ({ input }) => {
+      await updateUserRole(input.id, input.role);
+      return { success: true };
+    }),
+    delete: adminProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
+      if (input.id === ctx.user.id) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Vous ne pouvez pas supprimer votre propre compte' });
+      }
+      await deleteUser(input.id);
+      return { success: true };
     }),
   }),
 

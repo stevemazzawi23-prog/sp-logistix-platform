@@ -257,7 +257,6 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<User> {
-    // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
     const session = await this.verifySession(sessionCookie);
@@ -268,6 +267,14 @@ class SDKServer {
 
     const sessionUserId = session.openId;
     const signedInAt = new Date();
+
+    // Local password-based user (openId starts with 'local_')
+    if (sessionUserId.startsWith('local_')) {
+      const user = await db.getUserByOpenId(sessionUserId);
+      if (!user) throw ForbiddenError("User not found");
+      return user;
+    }
+
     let user = await db.getUserByOpenId(sessionUserId);
 
     // If user not in DB, sync from OAuth server automatically
