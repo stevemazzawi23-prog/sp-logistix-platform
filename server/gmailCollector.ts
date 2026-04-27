@@ -2,6 +2,13 @@
  * Gmail Collector - SP Logistix
  * Collecte automatique des bordereaux de livraison depuis logistixsp@gmail.com
  * Sujet des emails : "Rapport de livraison"
+ * 
+ * Stratégies de correspondance (par ordre de priorité):
+ * 1. Code client exact
+ * 2. Nom client exact
+ * 3. Alias (liste séparée par virgules)
+ * 4. Email de l'expéditeur
+ * 5. Similarité du nom (fuzzy match avec seuil 0.7)
  */
 
 import { ImapFlow } from "imapflow";
@@ -151,11 +158,108 @@ function extractPattern(text: string, pattern: RegExp): string | undefined {
 }
 
 /**
- * Collecte les emails non lus avec le sujet "Rapport de livraison"
+ * Calcule la similarité entre deux chaînes (Levenshtein distance)
+ * Retourne un score entre 0 et 1 (1 = identique)
+ */
+function calculateSimilarity(str1: string, str2: string): number {
+  const s1 = str1.toLowerCase().trim();
+  const s2 = str2.toLowerCase().trim();
+  if (s1 === s2) return 1;
+  if (s1.length === 0 || s2.length === 0) return 0;
+  
+  const longer = s1.length > s2.length ? s1 : s2;
+  const shorter = s1.length > s2.length ? s2 : s1;
+  if (longer.includes(shorter)) return 0.9;
+  
+  const costs: number[] = [];
+  for (let i = 0; i <= s1.length; i++) {
+    let lastValue = i;
+    for (let j = 0; j <= s2.length; j++) {
+      if (i === 0) {
+        costs[j] = j;
+      } else if (j > 0) {
+        let newValue = costs[j - 1];
+        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
+          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+        }
+        costs[j - 1] = lastValue;
+        lastValue = newValue;
+      }
+    }
+    if (i > 0) costs[s2.length] = lastValue;
+  }
+  const maxLen = Math.max(s1.length, s2.length);
+  return 1 - (costs[s2.length] || 0) / maxLen;
+}
+
+/**
+ * Trouve le meilleur client correspondant avec plusieurs stratégies
+ * 1. Code exact
+ * 2. Nom exact
+ * 3. Alias (liste séparée par virgules)
+ * 4. Email de l'expéditeur
+ * 5. Similarité du nom (fuzzy match)
+ */
+function findBestMatchingClient(
+  ticket: ParsedTicket,
+  allClients: Array<any>,
+  senderEmail?: string
+): { client: any; matchType: string; confidence: number } | null {
+  // 1. Code exact (meilleure correspondance)
+  const codeMatch = allClients.find(
+    c => c.code.toUpperCase() === ticket.clientCode.toUpperCase()
+  );
+  if (codeMatch) return { client: codeMatch, matchType: 'code_exact', confidence: 1.0 };
+
+  // 2. Nom exact
+  const nameMatch = allClients.find(
+    c => c.name.toUpperCase() === ticket.clientCode.toUpperCase()
+  );
+  if (nameMatch) return { client: nameMatch, matchType: 'name_exact', confidence: 0.95 };
+
+  // 3. Alias (liste séparée par virgules)
+  for (const client of allClients) {
+    if (!client.aliases) continue;
+    try {
+      const aliases = client.aliases
+        .split(',')
+        .map((a: string) => a.trim().toUpperCase())
+        .filter((a: string) => a.length > 0);
+      if (aliases.includes(ticket.clientCode.toUpperCase())) {
+        return { client, matchType: 'alias_exact', confidence: 0.9 };
+      }
+    } catch {}
+  }
+
+  // 4. Email de l'expéditeur
+  if (senderEmail) {
+    const emailMatch = allClients.find(
+      c => c.emailSender && c.emailSender.toLowerCase() === senderEmail.toLowerCase()
+    );
+    if (emailMatch) return { client: emailMatch, matchType: 'email_sender', confidence: 0.85 };
+  }
+
+  // 5. Similarité du nom (fuzzy match) - seuil 0.7
+  let bestMatch: { client: any; similarity: number } | null = null;
+  for (const client of allClients) {
+    const similarity = calculateSimilarity(ticket.clientCode, client.name);
+    if (similarity >= 0.7 && (!bestMatch || similarity > bestMatch.similarity)) {
+      bestMatch = { client, similarity };
+    }
+  }
+  if (bestMatch) {
+    return { client: bestMatch.client, matchType: 'name_fuzzy', confidence: bestMatch.similarity };
+  }
+
+  return null;
+}
+
+/**
+ * Collecte les emails avec le sujet "Rapport de livraison"
  * et les importe dans la base de données
  */
-export async function collectGmailTickets(): Promise<{ imported: number; skipped: number; errors: number }> {
-  const stats = { imported: 0, skipped: 0, errors: 0 };
+export async function collectGmailTickets(): Promise<{ imported: number; skipped: number; errors: number; unmatched: number }> {
+  const stats = { imported: 0, skipped: 0, errors: 0, unmatched: 0 };
 
   if (!GMAIL_APP_PASSWORD) {
     console.error("[GmailCollector] GMAIL_APP_PASSWORD non configuré");
@@ -182,7 +286,7 @@ export async function collectGmailTickets(): Promise<{ imported: number; skipped
 
     await client.mailboxOpen("INBOX");
 
-    // Chercher tous les emails avec le sujet "Rapport de livraison" (lus et non lus)
+    // Chercher tous les emails avec le sujet "Rapport de livraison"
     const searchResult = await client.search({
       subject: SUBJECT_FILTER,
     });
@@ -205,6 +309,7 @@ export async function collectGmailTickets(): Promise<{ imported: number; skipped
         const receivedAt = parsed.date || new Date();
         const htmlText = typeof parsed.html === "string" ? parsed.html.replace(/<[^>]+>/g, "\n") : "";
         const bodyText = parsed.text || htmlText || "";
+        const senderEmail = parsed.from?.text?.match(/[\w.-]+@[\w.-]+/)?.[0];
 
         const ticket = parseEmailBody(bodyText, subject, receivedAt);
 
@@ -214,19 +319,19 @@ export async function collectGmailTickets(): Promise<{ imported: number; skipped
           continue;
         }
 
-        // Trouver le client par code
-        const matchedClient = allClients.find(
-          c => c.code.toUpperCase() === ticket.clientCode.toUpperCase()
-        );
+        // Trouver le meilleur client correspondant
+        const match = findBestMatchingClient(ticket, allClients, senderEmail);
 
-        if (!matchedClient) {
-          console.warn(`[GmailCollector] Client non trouvé: ${ticket.clientCode}`);
-          stats.skipped++;
+        if (!match) {
+          console.warn(`[GmailCollector] ⚠️ Aucun client trouvé pour: ${ticket.clientCode} (email: ${senderEmail})`);
+          stats.unmatched++;
           continue;
         }
 
+        console.log(`[GmailCollector] Correspondance trouvée: ${ticket.clientCode} → ${match.client.name} (${match.matchType}, confiance: ${(match.confidence * 100).toFixed(0)}%)`);
+
         // Vérifier si le billet existe déjà (éviter les doublons)
-        const existingTickets = await getTicketsByClientId(matchedClient.id);
+        const existingTickets = await getTicketsByClientId(match.client.id);
         const alreadyExists = existingTickets.some(
           t => t.ticketNumber === ticket.ticketNumber
         );
@@ -239,7 +344,7 @@ export async function collectGmailTickets(): Promise<{ imported: number; skipped
 
         // Créer le billet
         await createDeliveryTicket({
-          clientId: matchedClient.id,
+          clientId: match.client.id,
           ticketNumber: ticket.ticketNumber,
           locationCode: ticket.locationCode,
           volumeTotalDef: ticket.volumeTotalDef,
@@ -251,7 +356,7 @@ export async function collectGmailTickets(): Promise<{ imported: number; skipped
           emailReceivedAt: ticket.emailReceivedAt,
         });
 
-        console.log(`[GmailCollector] ✅ Billet importé: ${ticket.ticketNumber} pour ${matchedClient.name}`);
+        console.log(`[GmailCollector] ✅ Billet importé: ${ticket.ticketNumber} pour ${match.client.name}`);
         stats.imported++;
       } catch (msgErr) {
         console.error(`[GmailCollector] Erreur traitement message ${uid}:`, msgErr);
@@ -260,7 +365,7 @@ export async function collectGmailTickets(): Promise<{ imported: number; skipped
     }
 
     await client.logout();
-    console.log(`[GmailCollector] Terminé — Importés: ${stats.imported}, Ignorés: ${stats.skipped}, Erreurs: ${stats.errors}`);
+    console.log(`[GmailCollector] Terminé — Importés: ${stats.imported}, Ignorés: ${stats.skipped}, Non-associés: ${stats.unmatched}, Erreurs: ${stats.errors}`);
   } catch (err) {
     console.error("[GmailCollector] Erreur connexion IMAP:", err);
     stats.errors++;

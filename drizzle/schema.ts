@@ -38,6 +38,8 @@ export const clients = mysqlTable("clients", {
   btuName: varchar("btuName", { length: 64 }),
   siteType: varchar("siteType", { length: 64 }).default("Delivery Location"),
   userId: int("userId"),
+  aliases: text("aliases"),
+  emailSender: varchar("emailSender", { length: 320 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
