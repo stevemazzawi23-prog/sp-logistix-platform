@@ -237,6 +237,46 @@ export const appRouter = router({
       const id = await createDeliveryTicket(data);
       return { id };
     }),
+    importFromAPK: publicProcedure.input(z.object({
+      apiToken: z.string(),
+      clientCode: z.string(),
+      ticketNumber: z.string(),
+      deliveryDate: z.string().or(z.date()),
+      volumeTotal: z.string().or(z.number()),
+      pieces: z.number().optional(),
+      locationCode: z.string().optional(),
+      duration: z.string().optional(),
+    })).mutation(async ({ input }) => {
+      const validToken = process.env.APK_SYNC_TOKEN || 'default-token-change-me';
+      if (input.apiToken !== validToken) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Token API invalide' });
+      }
+      const allClients = await getAllClients();
+      const client = allClients.find(c => c.code.toUpperCase() === input.clientCode.toUpperCase());
+      if (!client) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: `Client ${input.clientCode} non trouve` });
+      }
+      const existingTickets = await getTicketsByClientId(client.id);
+      if (existingTickets.some(t => t.ticketNumber === input.ticketNumber)) {
+        throw new TRPCError({ code: 'CONFLICT', message: `Billet ${input.ticketNumber} deja importe` });
+      }
+      let deliveryDate = new Date(input.deliveryDate);
+      if (isNaN(deliveryDate.getTime())) {
+        deliveryDate = new Date();
+      }
+      await createDeliveryTicket({
+        clientId: client.id,
+        ticketNumber: input.ticketNumber,
+        locationCode: input.locationCode,
+        volumeTotal: String(input.volumeTotal),
+        pieces: input.pieces,
+        duration: input.duration,
+        deliveryDate,
+        emailSubject: 'Importe depuis APK',
+        emailReceivedAt: new Date(),
+      });
+      return { success: true, message: `Billet ${input.ticketNumber} importe pour ${client.name}` };
+    }),
   }),
 
   // ============ MONTHLY REPORTS ============
