@@ -20,8 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Truck, Plus, Search, ChevronDown, ChevronRight, Clock, User, MapPin, Smartphone } from "lucide-react";
+import { Truck, Plus, Search, ChevronDown, ChevronRight, Clock, User, MapPin, Smartphone, ExternalLink } from "lucide-react";
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 
 // Component to display units grid for a specific ticket
@@ -112,6 +113,7 @@ function TicketRow({
   clientName: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [, setLocation] = useLocation();
 
   const formatDate = (d: any) => {
     try { return new Date(d).toLocaleDateString("fr-CA"); } catch { return "—"; }
@@ -181,10 +183,21 @@ function TicketRow({
             )}
           </div>
         </td>
+        <td className="py-3 px-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs gap-1 text-[#1a5f3f] hover:text-[#1a5f3f] hover:bg-[#1a5f3f]/10"
+            onClick={(e) => { e.stopPropagation(); setLocation(`/admin/tickets/${ticket.id}`); }}
+          >
+            <ExternalLink className="h-3 w-3" />
+            Détails
+          </Button>
+        </td>
       </tr>
       {expanded && (
         <tr className="border-b bg-muted/5">
-          <td colSpan={6} className="p-0">
+          <td colSpan={7} className="p-0">
             <TicketUnitsGrid ticketId={ticket.id} />
           </td>
         </tr>
@@ -465,6 +478,7 @@ function AdminTicketsContent() {
                     <th className="text-left py-3 px-3 font-medium text-muted-foreground">
                       Livreur / Site
                     </th>
+                    <th className="py-3 px-3"></th>
                   </tr>
                 </thead>
                 <tbody>

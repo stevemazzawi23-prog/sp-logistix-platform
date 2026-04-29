@@ -11,6 +11,8 @@ import AdminClients from "./pages/AdminClients";
 import AdminTickets from "./pages/AdminTickets";
 import AdminSettings from "./pages/AdminSettings";
 import AdminUsers from "./pages/AdminUsers";
+import TicketDetail from "./pages/TicketDetail";
+import { AdminTicketDetail } from "./pages/TicketDetail";
 import Login from "./pages/Login";
 import ChangePassword from "./pages/ChangePassword";
 import { trpc } from "@/lib/trpc";
@@ -79,6 +81,8 @@ function Router() {
       <Route path="/admin/tickets" component={() => <ProtectedRoute component={AdminTickets} />} />
       <Route path="/admin/users" component={() => <ProtectedRoute component={AdminUsers} />} />
       <Route path="/admin/settings" component={() => <ProtectedRoute component={AdminSettings} />} />
+      <Route path="/admin/tickets/:id" component={({ params }) => <ProtectedRoute component={() => <AdminTicketDetail ticketId={Number(params.id)} />} />} />
+      <Route path="/tickets/:id" component={({ params }) => <ProtectedRoute component={() => <TicketDetail ticketId={Number(params.id)} />} />} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

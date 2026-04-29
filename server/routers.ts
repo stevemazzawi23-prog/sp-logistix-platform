@@ -9,7 +9,8 @@ import {
   getTicketsByClientId, getTicketsByClientIdAndMonth, createDeliveryTicket, getAllTickets,
   getMonthlyReportsByClientId, upsertMonthlyReport,
   getUserByEmail, createUserWithPassword, updateUserPassword, updateUserRole, deleteUser, getAllUsers,
-  getUnitsByTicketId
+  getUnitsByTicketId,
+  getTicketById
 } from "./db";
 import bcrypt from "bcryptjs";
 import { sdk } from "./_core/sdk";
@@ -218,6 +219,18 @@ export const appRouter = router({
     listAll: adminProcedure.query(async () => {
       return getAllTickets();
     }),
+    getById: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input, ctx }) => {
+      const ticket = await getTicketById(input.id);
+      if (!ticket) throw new TRPCError({ code: 'NOT_FOUND', message: 'Billet non trouvé' });
+      // Non-admins can only view their own client's tickets
+      if (ctx.user.role !== 'admin') {
+        const client = await getClientByUserId(ctx.user.id);
+        if (!client || client.id !== ticket.clientId) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Accès refusé' });
+        }
+      }
+      return ticket;
+    }),
     create: adminProcedure.input(z.object({
       clientId: z.number(),
       ticketNumber: z.string().min(1),
@@ -282,6 +295,19 @@ export const appRouter = router({
 
   // ============ DELIVERY UNITS ============
   units: router({
+    // Public units access for client-facing ticket detail
+    listByTicketPublic: protectedProcedure.input(z.object({ ticketId: z.number() })).query(async ({ input, ctx }) => {
+      // Verify the ticket belongs to the user's client
+      const ticket = await getTicketById(input.ticketId);
+      if (!ticket) throw new TRPCError({ code: 'NOT_FOUND', message: 'Billet non trouvé' });
+      if (ctx.user.role !== 'admin') {
+        const client = await getClientByUserId(ctx.user.id);
+        if (!client || client.id !== ticket.clientId) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Accès refusé' });
+        }
+      }
+      return getUnitsByTicketId(input.ticketId);
+    }),
     listByTicket: protectedProcedure.input(z.object({ ticketId: z.number() })).query(async ({ input }) => {
       return getUnitsByTicketId(input.ticketId);
     }),

@@ -251,6 +251,13 @@ export async function getAllTickets() {
   return db.select().from(deliveryTickets).orderBy(desc(deliveryTickets.deliveryDate));
 }
 
+export async function getTicketById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const results = await db.select().from(deliveryTickets).where(eq(deliveryTickets.id, id)).limit(1);
+  return results[0] ?? null;
+}
+
 // ============ DELIVERY UNIT HELPERS ============
 
 export async function getUnitsByTicketId(ticketId: number) {

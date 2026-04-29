@@ -21,3 +21,5 @@
 - [ ] Notifications automatiques (email au propriétaire et au client)
 - [x] Design conforme aux captures d'écran fournies
 - [x] Tests unitaires (15 tests passés)
+- [x] Page de détail de billet avec vue complète (date/heure, livreur, site, unités en grille)
+- [x] Bouton "Détails" dans les listes admin et client pour ouvrir la page de détail

@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { FileText, Search, ChevronDown, ChevronRight, Clock, User, MapPin, Smartphone } from "lucide-react";
+import { FileText, Search, ChevronDown, ChevronRight, Clock, User, MapPin, Smartphone, ExternalLink } from "lucide-react";
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
 
 // Units grid component
 function TicketUnitsGrid({ ticketId }: { ticketId: number }) {
@@ -90,6 +92,7 @@ function TicketUnitsGrid({ ticketId }: { ticketId: number }) {
 // Expandable ticket row
 function TicketRow({ ticket }: { ticket: any }) {
   const [expanded, setExpanded] = useState(false);
+  const [, setLocation] = useLocation();
 
   const formatDate = (d: any) => {
     try { return new Date(d).toLocaleDateString("fr-CA"); } catch { return "—"; }
@@ -152,10 +155,21 @@ function TicketRow({ ticket }: { ticket: any }) {
             {!ticket.driverName && (ticket.duration || "—")}
           </div>
         </td>
+        <td className="py-3 px-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs gap-1 text-[#1a5f3f] hover:text-[#1a5f3f] hover:bg-[#1a5f3f]/10"
+            onClick={(e) => { e.stopPropagation(); setLocation(`/tickets/${ticket.id}`); }}
+          >
+            <ExternalLink className="h-3 w-3" />
+            Détails
+          </Button>
+        </td>
       </tr>
       {expanded && (
         <tr className="border-b bg-muted/5">
-          <td colSpan={7} className="p-0">
+          <td colSpan={8} className="p-0">
             <TicketUnitsGrid ticketId={ticket.id} />
           </td>
         </tr>
@@ -274,6 +288,7 @@ function TicketsContent() {
                     <th className="text-left py-3 px-3 font-medium text-muted-foreground">
                       Livreur
                     </th>
+                    <th className="py-3 px-3"></th>
                   </tr>
                 </thead>
                 <tbody>
