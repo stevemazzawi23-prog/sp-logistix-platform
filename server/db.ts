@@ -280,6 +280,12 @@ export async function createDeliveryUnits(units: InsertDeliveryUnit[]) {
   await db.insert(deliveryUnits).values(units);
 }
 
+export async function deleteDeliveryUnit(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(deliveryUnits).where(eq(deliveryUnits.id, id));
+}
+
 // ============ MONTHLY REPORT HELPERS ============
 
 export async function getMonthlyReportsByClientId(clientId: number) {

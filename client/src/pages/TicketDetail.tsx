@@ -3,13 +3,16 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft, Truck, Calendar, Clock, User, MapPin, Package,
-  Smartphone, Hash, Droplets, BarChart3, Printer
+  Smartphone, Hash, Droplets, BarChart3, Printer, Plus, Trash2
 } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useState } from "react";
+import { toast } from "sonner";
 
 interface TicketDetailProps {
   ticketId: number;
@@ -18,9 +21,33 @@ interface TicketDetailProps {
 
 function TicketDetailContent({ ticketId, isAdmin }: TicketDetailProps) {
   const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
+
   const { data: ticket, isLoading: ticketLoading } = trpc.tickets.getById.useQuery({ id: ticketId });
   const { data: units, isLoading: unitsLoading } = trpc.units.listByTicketPublic.useQuery({ ticketId });
   const { data: clients } = trpc.clients.list.useQuery(undefined, { enabled: !!isAdmin });
+
+  // Form state for adding a unit (admin only)
+  const [newUnitName, setNewUnitName] = useState("");
+  const [newLiters, setNewLiters] = useState("");
+
+  const addUnit = trpc.units.addUnit.useMutation({
+    onSuccess: () => {
+      utils.units.listByTicketPublic.invalidate({ ticketId });
+      setNewUnitName("");
+      setNewLiters("");
+      toast.success("Unité ajoutée avec succès");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deleteUnit = trpc.units.deleteUnit.useMutation({
+    onSuccess: () => {
+      utils.units.listByTicketPublic.invalidate({ ticketId });
+      toast.success("Unité supprimée");
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   const clientName = isAdmin
     ? clients?.find((c) => c.id === ticket?.clientId)?.name ?? "—"
@@ -54,6 +81,15 @@ function TicketDetailContent({ ticketId, isAdmin }: TicketDetailProps) {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleAddUnit = () => {
+    const name = newUnitName.trim();
+    const liters = newLiters.trim();
+    if (!name) { toast.error("Veuillez entrer un nom d'unité"); return; }
+    const litersNum = parseFloat(liters);
+    if (!liters || isNaN(litersNum) || litersNum < 0) { toast.error("Veuillez entrer un volume valide"); return; }
+    addUnit.mutate({ ticketId, unitName: name, liters: String(litersNum) });
   };
 
   if (ticketLoading) {
@@ -222,7 +258,7 @@ function TicketDetailContent({ ticketId, isAdmin }: TicketDetailProps) {
             Détail des unités remplies
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-4 pb-4">
+        <CardContent className="px-4 pb-4 space-y-4">
           {unitsLoading ? (
             <div className="space-y-2">
               <Skeleton className="h-8 w-full" />
@@ -233,6 +269,9 @@ function TicketDetailContent({ ticketId, isAdmin }: TicketDetailProps) {
             <div className="text-center py-8 text-muted-foreground">
               <Droplets className="h-8 w-8 mx-auto mb-2 opacity-30" />
               <p className="text-sm italic">Aucun détail d'unité disponible pour ce bordereau.</p>
+              {isAdmin && (
+                <p className="text-xs mt-1 text-muted-foreground">Utilisez le formulaire ci-dessous pour ajouter des unités.</p>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-border">
@@ -243,6 +282,7 @@ function TicketDetailContent({ ticketId, isAdmin }: TicketDetailProps) {
                     <th className="text-left py-2.5 px-4 font-semibold text-foreground">Unité / Réservoir</th>
                     <th className="text-right py-2.5 px-4 font-semibold text-foreground">Volume (L)</th>
                     <th className="text-right py-2.5 px-4 font-semibold text-foreground hidden sm:table-cell">% du total</th>
+                    {isAdmin && <th className="py-2.5 px-2 print:hidden" />}
                   </tr>
                 </thead>
                 <tbody>
@@ -267,6 +307,19 @@ function TicketDetailContent({ ticketId, isAdmin }: TicketDetailProps) {
                             <span className="text-xs text-muted-foreground w-10 text-right">{pct}%</span>
                           </div>
                         </td>
+                        {isAdmin && (
+                          <td className="py-3 px-2 print:hidden">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                              onClick={() => deleteUnit.mutate({ id: unit.id })}
+                              disabled={deleteUnit.isPending}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -278,9 +331,47 @@ function TicketDetailContent({ ticketId, isAdmin }: TicketDetailProps) {
                       {totalLiters.toLocaleString("fr-CA", { maximumFractionDigits: 1 })} L
                     </td>
                     <td className="py-3 px-4 text-right hidden sm:table-cell text-xs text-muted-foreground">100%</td>
+                    {isAdmin && <td className="print:hidden" />}
                   </tr>
                 </tfoot>
               </table>
+            </div>
+          )}
+
+          {/* Admin: Add unit form */}
+          {isAdmin && (
+            <div className="print:hidden border-t pt-4 mt-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                <Plus className="h-3.5 w-3.5" />
+                Ajouter une unité
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input
+                  placeholder="Nom de l'unité (ex: Unité 12)"
+                  value={newUnitName}
+                  onChange={(e) => setNewUnitName(e.target.value)}
+                  className="flex-1"
+                  onKeyDown={(e) => e.key === "Enter" && handleAddUnit()}
+                />
+                <Input
+                  placeholder="Volume en litres (ex: 5)"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={newLiters}
+                  onChange={(e) => setNewLiters(e.target.value)}
+                  className="sm:w-48"
+                  onKeyDown={(e) => e.key === "Enter" && handleAddUnit()}
+                />
+                <Button
+                  onClick={handleAddUnit}
+                  disabled={addUnit.isPending}
+                  className="bg-[#1a5f3f] hover:bg-[#1a5f3f]/90 text-white gap-1.5 shrink-0"
+                >
+                  <Plus className="h-4 w-4" />
+                  {addUnit.isPending ? "Ajout..." : "Ajouter"}
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

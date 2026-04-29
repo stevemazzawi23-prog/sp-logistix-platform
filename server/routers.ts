@@ -9,7 +9,7 @@ import {
   getTicketsByClientId, getTicketsByClientIdAndMonth, createDeliveryTicket, getAllTickets,
   getMonthlyReportsByClientId, upsertMonthlyReport,
   getUserByEmail, createUserWithPassword, updateUserPassword, updateUserRole, deleteUser, getAllUsers,
-  getUnitsByTicketId,
+  getUnitsByTicketId, createDeliveryUnit, deleteDeliveryUnit,
   getTicketById
 } from "./db";
 import bcrypt from "bcryptjs";
@@ -310,6 +310,24 @@ export const appRouter = router({
     }),
     listByTicket: protectedProcedure.input(z.object({ ticketId: z.number() })).query(async ({ input }) => {
       return getUnitsByTicketId(input.ticketId);
+    }),
+    addUnit: adminProcedure.input(z.object({
+      ticketId: z.number(),
+      unitName: z.string().min(1),
+      liters: z.string().min(1),
+    })).mutation(async ({ input }) => {
+      const ticket = await getTicketById(input.ticketId);
+      if (!ticket) throw new TRPCError({ code: 'NOT_FOUND', message: 'Billet non trouvé' });
+      const id = await createDeliveryUnit({
+        ticketId: input.ticketId,
+        unitName: input.unitName,
+        liters: input.liters,
+      });
+      return { id, success: true };
+    }),
+    deleteUnit: adminProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
+      await deleteDeliveryUnit(input.id);
+      return { success: true };
     }),
   }),
 
