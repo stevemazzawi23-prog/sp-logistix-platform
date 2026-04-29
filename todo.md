@@ -25,3 +25,5 @@
 - [x] Bouton "Détails" dans les listes admin et client pour ouvrir la page de détail
 - [x] Bouton impression/PDF sur la page de détail de billet
 - [x] Filtre par période (mois/année) dans les listes de bordereaux admin et client
+- [x] Logo SP Logistix comme favicon et icône d'application
+- [x] Nom "SP Logistix" comme titre de l'application
