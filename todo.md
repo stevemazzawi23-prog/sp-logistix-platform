@@ -27,3 +27,4 @@
 - [x] Filtre par période (mois/année) dans les listes de bordereaux admin et client
 - [x] Logo SP Logistix comme favicon et icône d'application
 - [x] Nom "SP Logistix" comme titre de l'application
+- [ ] BUG: Impossible d'ouvrir un billet pour voir les détails de livraison
