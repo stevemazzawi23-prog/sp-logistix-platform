@@ -1,7 +1,7 @@
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, clients, contacts, deliveryTickets, monthlyReports } from "../drizzle/schema";
-import type { InsertClient, InsertContact, InsertDeliveryTicket, InsertMonthlyReport } from "../drizzle/schema";
+import { InsertUser, users, clients, contacts, deliveryTickets, deliveryUnits, monthlyReports } from "../drizzle/schema";
+import type { InsertClient, InsertContact, InsertDeliveryTicket, InsertDeliveryUnit, InsertMonthlyReport } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -249,6 +249,28 @@ export async function getAllTickets() {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(deliveryTickets).orderBy(desc(deliveryTickets.deliveryDate));
+}
+
+// ============ DELIVERY UNIT HELPERS ============
+
+export async function getUnitsByTicketId(ticketId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(deliveryUnits).where(eq(deliveryUnits.ticketId, ticketId));
+}
+
+export async function createDeliveryUnit(data: InsertDeliveryUnit) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(deliveryUnits).values(data);
+  return result[0].insertId;
+}
+
+export async function createDeliveryUnits(units: InsertDeliveryUnit[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  if (units.length === 0) return;
+  await db.insert(deliveryUnits).values(units);
 }
 
 // ============ MONTHLY REPORT HELPERS ============

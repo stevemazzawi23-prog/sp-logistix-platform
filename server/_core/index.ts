@@ -40,7 +40,21 @@ async function startServer() {
   // API HTTP classique pour l'importation des billets depuis l'APK
   app.post('/api/import-ticket', async (req, res) => {
     try {
-      const { apiToken, clientCode, ticketNumber, deliveryDate, volumeTotal, pieces, locationCode, duration } = req.body;
+      const {
+        apiToken,
+        clientCode,
+        ticketNumber,
+        deliveryDate,
+        volumeTotal,
+        pieces,
+        locationCode,
+        duration,
+        startTime,
+        endTime,
+        driverName,
+        siteName,
+        units, // tableau [{unitName, liters}]
+      } = req.body;
       
       // Valider le token
       const validToken = process.env.APK_SYNC_TOKEN || 'default-token-change-me';
@@ -48,40 +62,57 @@ async function startServer() {
         return res.status(401).json({ error: 'Token API invalide' });
       }
 
-      // Importer le billet via tRPC
-      const { getAllClients, getTicketsByClientId, createDeliveryTicket } = await import('../db');
+      const { getAllClients, getTicketsByClientId, createDeliveryTicket, createDeliveryUnits } = await import('../db');
       const allClients = await getAllClients();
-      const client = allClients.find(c => c.code.toUpperCase() === clientCode.toUpperCase());
+      const client = allClients.find((c: any) => c.code.toUpperCase() === clientCode.toUpperCase());
       
       if (!client) {
-        return res.status(404).json({ error: `Client ${clientCode} non trouvé` });
+        return res.status(404).json({ error: `Client ${clientCode} non trouve` });
       }
 
       const existingTickets = await getTicketsByClientId(client.id);
-      if (existingTickets.some(t => t.ticketNumber === ticketNumber)) {
-        return res.status(409).json({ error: `Billet ${ticketNumber} déjà importé` });
+      if (existingTickets.some((t: any) => t.ticketNumber === ticketNumber)) {
+        return res.status(409).json({ error: `Billet ${ticketNumber} deja importe` });
       }
 
-      let deliveryDateObj = new Date(deliveryDate);
-      if (isNaN(deliveryDateObj.getTime())) {
-        deliveryDateObj = new Date();
-      }
+      let deliveryDateObj = new Date(deliveryDate || Date.now());
+      if (isNaN(deliveryDateObj.getTime())) deliveryDateObj = new Date();
 
-      await createDeliveryTicket({
+      let startTimeObj = startTime ? new Date(Number(startTime)) : null;
+      let endTimeObj = endTime ? new Date(Number(endTime)) : null;
+      if (startTimeObj && isNaN(startTimeObj.getTime())) startTimeObj = null;
+      if (endTimeObj && isNaN(endTimeObj.getTime())) endTimeObj = null;
+
+      const ticketId = await createDeliveryTicket({
         clientId: client.id,
         ticketNumber,
-        locationCode,
+        locationCode: locationCode || siteName || '',
         volumeTotal: String(volumeTotal),
-        pieces,
+        pieces: pieces || (Array.isArray(units) ? units.length : 1),
         duration,
         deliveryDate: deliveryDateObj,
-        emailSubject: 'Importé depuis APK',
+        startTime: startTimeObj,
+        endTime: endTimeObj,
+        driverName: driverName || null,
+        siteName: siteName || null,
+        source: 'apk',
+        emailSubject: 'Importe depuis APK',
         emailReceivedAt: new Date(),
       });
 
-      res.json({ success: true, message: `Billet ${ticketNumber} importé pour ${client.name}` });
+      // Sauvegarder les unités détaillées
+      if (Array.isArray(units) && units.length > 0) {
+        const unitRecords = units.map((u: any) => ({
+          ticketId,
+          unitName: String(u.unitName || u.name || 'Unité'),
+          liters: String(u.liters || u.volume || 0),
+        }));
+        await createDeliveryUnits(unitRecords);
+      }
+
+      res.json({ success: true, message: `Billet ${ticketNumber} importe pour ${client.name}`, ticketId });
     } catch (error) {
-      console.error('Erreur lors de l\'importation:', error);
+      console.error('Erreur lors de l importation:', error);
       res.status(500).json({ error: 'Erreur serveur' });
     }
   });

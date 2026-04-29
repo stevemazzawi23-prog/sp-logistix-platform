@@ -11,6 +11,11 @@
 - [x] Tableau de bord client : bordereaux de livraison (date, unités, litrage)
 - [x] Tableau de bord client : historique des livraisons
 - [ ] Collecte automatique des bons de livraison via API Gmail
+- [x] Endpoint /api/import-ticket pour synchronisation APK
+- [x] Table delivery_units pour stocker le détail des unités remplies
+- [x] Vue grille des unités dans les bordereaux (admin et client)
+- [x] Champ driverName, siteName, startTime, endTime dans les tickets APK
+- [x] Badge APK sur les bordereaux importés depuis l'application mobile
 - [ ] Extraction des données des emails (unités remplies, litrage, date, client)
 - [x] Rapports mensuels récapitulatifs par client
 - [ ] Notifications automatiques (email au propriétaire et au client)

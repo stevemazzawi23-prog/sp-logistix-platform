@@ -78,10 +78,29 @@ export const deliveryTickets = mysqlTable("delivery_tickets", {
   pieces: int("pieces").default(1),
   duration: varchar("duration", { length: 16 }),
   deliveryDate: timestamp("deliveryDate").notNull(),
+  startTime: timestamp("startTime"),
+  endTime: timestamp("endTime"),
+  driverName: varchar("driverName", { length: 255 }),
+  siteName: varchar("siteName", { length: 255 }),
+  source: varchar("source", { length: 32 }).default("manual"),
   emailSubject: varchar("emailSubject", { length: 512 }),
   emailReceivedAt: timestamp("emailReceivedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+/**
+ * Delivery units - individual units filled during a delivery
+ */
+export const deliveryUnits = mysqlTable("delivery_units", {
+  id: int("id").autoincrement().primaryKey(),
+  ticketId: int("ticketId").notNull(),
+  unitName: varchar("unitName", { length: 255 }).notNull(),
+  liters: decimal("liters", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type DeliveryUnit = typeof deliveryUnits.$inferSelect;
+export type InsertDeliveryUnit = typeof deliveryUnits.$inferInsert;
 
 export type DeliveryTicket = typeof deliveryTickets.$inferSelect;
 export type InsertDeliveryTicket = typeof deliveryTickets.$inferInsert;

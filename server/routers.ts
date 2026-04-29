@@ -8,7 +8,8 @@ import {
   getContactsByClientId, createContact, updateContact, deleteContact,
   getTicketsByClientId, getTicketsByClientIdAndMonth, createDeliveryTicket, getAllTickets,
   getMonthlyReportsByClientId, upsertMonthlyReport,
-  getUserByEmail, createUserWithPassword, updateUserPassword, updateUserRole, deleteUser, getAllUsers
+  getUserByEmail, createUserWithPassword, updateUserPassword, updateUserRole, deleteUser, getAllUsers,
+  getUnitsByTicketId
 } from "./db";
 import bcrypt from "bcryptjs";
 import { sdk } from "./_core/sdk";
@@ -276,6 +277,13 @@ export const appRouter = router({
         emailReceivedAt: new Date(),
       });
       return { success: true, message: `Billet ${input.ticketNumber} importe pour ${client.name}` };
+    }),
+  }),
+
+  // ============ DELIVERY UNITS ============
+  units: router({
+    listByTicket: protectedProcedure.input(z.object({ ticketId: z.number() })).query(async ({ input }) => {
+      return getUnitsByTicketId(input.ticketId);
     }),
   }),
 
