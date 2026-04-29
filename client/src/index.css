@@ -175,3 +175,42 @@
     }
   }
 }
+/* ===== PRINT / PDF STYLES ===== */
+@media print {
+  /* Hide navigation and UI chrome */
+  nav, aside, header, .print\:hidden, [data-sidebar], [data-radix-popper-content-wrapper] {
+    display: none !important;
+  }
+
+  /* Reset backgrounds for printing */
+  body, html {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Make content full width */
+  main, .main-content, [class*="ml-"] {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Cards print cleanly */
+  .card, [class*="shadow"] {
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+  }
+
+  /* Ensure table borders show */
+  table, th, td {
+    border-color: #ccc !important;
+  }
+
+  /* Page breaks */
+  .page-break-before { page-break-before: always; }
+  .page-break-after { page-break-after: always; }
+
+  /* Print footer with ticket number */
+  @page {
+    margin: 1.5cm;
+  }
+}

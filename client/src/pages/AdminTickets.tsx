@@ -212,6 +212,8 @@ function AdminTicketsContent() {
   const { data: allClients } = trpc.clients.list.useQuery();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [filterMonth, setFilterMonth] = useState<string>("all");
+  const [filterYear, setFilterYear] = useState<string>("all");
 
   const [form, setForm] = useState({
     clientId: "",
@@ -257,18 +259,42 @@ function AdminTicketsContent() {
     });
   };
 
+  const availableYears = useMemo(() => {
+    if (!allTickets) return [];
+    const years = new Set<string>();
+    allTickets.forEach((t) => {
+      if (t.deliveryDate) {
+        try { years.add(new Date(t.deliveryDate).getFullYear().toString()); } catch {}
+      }
+    });
+    return Array.from(years).sort().reverse();
+  }, [allTickets]);
+
   const filteredTickets = useMemo(() => {
     if (!allTickets) return [];
-    if (!search.trim()) return allTickets;
+    let result = allTickets;
+    if (filterYear !== "all") {
+      result = result.filter((t) => {
+        if (!t.deliveryDate) return false;
+        try { return new Date(t.deliveryDate).getFullYear().toString() === filterYear; } catch { return false; }
+      });
+    }
+    if (filterMonth !== "all") {
+      result = result.filter((t) => {
+        if (!t.deliveryDate) return false;
+        try { return (new Date(t.deliveryDate).getMonth() + 1).toString() === filterMonth; } catch { return false; }
+      });
+    }
+    if (!search.trim()) return result;
     const s = search.toLowerCase();
-    return allTickets.filter(
+    return result.filter(
       (t) =>
         t.ticketNumber.toLowerCase().includes(s) ||
         (t.locationCode && t.locationCode.toLowerCase().includes(s)) ||
         (t.driverName && t.driverName.toLowerCase().includes(s)) ||
         (t.siteName && t.siteName.toLowerCase().includes(s))
     );
-  }, [allTickets, search]);
+  }, [allTickets, search, filterMonth, filterYear]);
 
   // Map clientId to name
   const clientMap = useMemo(() => {
@@ -423,15 +449,44 @@ function AdminTicketsContent() {
         </Dialog>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher par ticket, livreur, site..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      {/* Search + Filters */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher par ticket, livreur, site..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={filterYear} onValueChange={setFilterYear}>
+          <SelectTrigger className="w-[110px]">
+            <SelectValue placeholder="Année" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toutes</SelectItem>
+            {availableYears.map((y) => (
+              <SelectItem key={y} value={y}>{y}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterMonth} onValueChange={setFilterMonth}>
+          <SelectTrigger className="w-[130px]">
+            <SelectValue placeholder="Mois" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous les mois</SelectItem>
+            {["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"].map((m, i) => (
+              <SelectItem key={i+1} value={(i+1).toString()}>{m}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {(filterYear !== "all" || filterMonth !== "all") && (
+          <Button variant="ghost" size="sm" onClick={() => { setFilterYear("all"); setFilterMonth("all"); }} className="text-muted-foreground h-9 px-2">
+            Réinitialiser
+          </Button>
+        )}
       </div>
 
       {/* Info banner */}

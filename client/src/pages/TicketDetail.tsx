@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft, Truck, Calendar, Clock, User, MapPin, Package,
-  Smartphone, Hash, Droplets, BarChart3
+  Smartphone, Hash, Droplets, BarChart3, Printer
 } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 
@@ -52,6 +52,10 @@ function TicketDetailContent({ ticketId, isAdmin }: TicketDetailProps) {
 
   const backPath = isAdmin ? "/admin/tickets" : "/tickets";
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   if (ticketLoading) {
     return (
       <div className="p-6 space-y-4 max-w-4xl mx-auto">
@@ -79,10 +83,19 @@ function TicketDetailContent({ ticketId, isAdmin }: TicketDetailProps) {
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-3 print:hidden">
         <Button variant="ghost" size="sm" onClick={() => setLocation(backPath)} className="gap-1.5">
           <ArrowLeft className="h-4 w-4" />
           Retour
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handlePrint}
+          className="gap-1.5 border-[#1a5f3f] text-[#1a5f3f] hover:bg-[#1a5f3f]/10"
+        >
+          <Printer className="h-4 w-4" />
+          Imprimer / PDF
         </Button>
       </div>
 
