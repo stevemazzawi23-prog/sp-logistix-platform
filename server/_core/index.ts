@@ -36,6 +36,56 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+
+  // API HTTP classique pour l'importation des billets depuis l'APK
+  app.post('/api/import-ticket', async (req, res) => {
+    try {
+      const { apiToken, clientCode, ticketNumber, deliveryDate, volumeTotal, pieces, locationCode, duration } = req.body;
+      
+      // Valider le token
+      const validToken = process.env.APK_SYNC_TOKEN || 'default-token-change-me';
+      if (apiToken !== validToken) {
+        return res.status(401).json({ error: 'Token API invalide' });
+      }
+
+      // Importer le billet via tRPC
+      const { getAllClients, getTicketsByClientId, createDeliveryTicket } = await import('../db');
+      const allClients = await getAllClients();
+      const client = allClients.find(c => c.code.toUpperCase() === clientCode.toUpperCase());
+      
+      if (!client) {
+        return res.status(404).json({ error: `Client ${clientCode} non trouvé` });
+      }
+
+      const existingTickets = await getTicketsByClientId(client.id);
+      if (existingTickets.some(t => t.ticketNumber === ticketNumber)) {
+        return res.status(409).json({ error: `Billet ${ticketNumber} déjà importé` });
+      }
+
+      let deliveryDateObj = new Date(deliveryDate);
+      if (isNaN(deliveryDateObj.getTime())) {
+        deliveryDateObj = new Date();
+      }
+
+      await createDeliveryTicket({
+        clientId: client.id,
+        ticketNumber,
+        locationCode,
+        volumeTotal: String(volumeTotal),
+        pieces,
+        duration,
+        deliveryDate: deliveryDateObj,
+        emailSubject: 'Importé depuis APK',
+        emailReceivedAt: new Date(),
+      });
+
+      res.json({ success: true, message: `Billet ${ticketNumber} importé pour ${client.name}` });
+    } catch (error) {
+      console.error('Erreur lors de l\'importation:', error);
+      res.status(500).json({ error: 'Erreur serveur' });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",
