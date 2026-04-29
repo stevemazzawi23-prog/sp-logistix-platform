@@ -10,7 +10,8 @@ import {
   getMonthlyReportsByClientId, upsertMonthlyReport,
   getUserByEmail, createUserWithPassword, updateUserPassword, updateUserRole, deleteUser, getAllUsers,
   getUnitsByTicketId, createDeliveryUnit, deleteDeliveryUnit,
-  getTicketById
+  getTicketById,
+  getSitesByClientId, createDeliverySite, updateDeliverySite, deleteDeliverySite
 } from "./db";
 import bcrypt from "bcryptjs";
 import { sdk } from "./_core/sdk";
@@ -353,6 +354,43 @@ export const appRouter = router({
         totalDeliveries: tickets.length,
       });
       return { success: true, totalVolume, totalUnits, totalDeliveries: tickets.length };
+    }),
+  }),
+
+  // ============ DELIVERY SITES ============
+  sites: router({
+    listByClient: adminProcedure.input(z.object({ clientId: z.number() })).query(async ({ input }) => {
+      return getSitesByClientId(input.clientId);
+    }),
+    create: adminProcedure.input(z.object({
+      clientId: z.number(),
+      name: z.string().min(1),
+      address: z.string().optional(),
+      city: z.string().optional(),
+      province: z.string().optional(),
+      postalCode: z.string().optional(),
+      notes: z.string().optional(),
+    })).mutation(async ({ input }) => {
+      const id = await createDeliverySite({ ...input, isActive: 1 });
+      return { id, success: true };
+    }),
+    update: adminProcedure.input(z.object({
+      id: z.number(),
+      name: z.string().min(1).optional(),
+      address: z.string().optional(),
+      city: z.string().optional(),
+      province: z.string().optional(),
+      postalCode: z.string().optional(),
+      notes: z.string().optional(),
+      isActive: z.number().optional(),
+    })).mutation(async ({ input }) => {
+      const { id, ...data } = input;
+      await updateDeliverySite(id, data);
+      return { success: true };
+    }),
+    delete: adminProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
+      await deleteDeliverySite(input.id);
+      return { success: true };
     }),
   }),
 

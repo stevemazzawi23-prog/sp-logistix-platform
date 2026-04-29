@@ -117,6 +117,52 @@ async function startServer() {
     }
   });
 
+  // Endpoint public pour récupérer les sites de livraison d'un client (APK)
+  app.get('/api/sites/:clientCode', async (req, res) => {
+    try {
+      const apiToken = req.headers['x-api-token'] || req.query.token;
+      const validToken = process.env.APK_SYNC_TOKEN || 'default-token-change-me';
+      if (apiToken !== validToken) {
+        return res.status(401).json({ error: 'Token API invalide' });
+      }
+      const { getSitesByClientCode } = await import('../db');
+      const result = await getSitesByClientCode(req.params.clientCode);
+      if (!result) {
+        return res.status(404).json({ error: `Client ${req.params.clientCode} non trouvé` });
+      }
+      res.json({ success: true, clientName: result.client.name, sites: result.sites });
+    } catch (error) {
+      console.error('Erreur /api/sites:', error);
+      res.status(500).json({ error: 'Erreur serveur' });
+    }
+  });
+
+  // Endpoint public pour ajouter un site depuis l'APK
+  app.post('/api/sites/:clientCode', async (req, res) => {
+    try {
+      const apiToken = req.headers['x-api-token'] || req.body.apiToken;
+      const validToken = process.env.APK_SYNC_TOKEN || 'default-token-change-me';
+      if (apiToken !== validToken) {
+        return res.status(401).json({ error: 'Token API invalide' });
+      }
+      const { name, address, city, province, postalCode, notes } = req.body;
+      if (!name) return res.status(400).json({ error: 'Le nom du site est requis' });
+      const { getSitesByClientCode, createDeliverySite } = await import('../db');
+      const result = await getSitesByClientCode(req.params.clientCode);
+      if (!result) {
+        return res.status(404).json({ error: `Client ${req.params.clientCode} non trouvé` });
+      }
+      const id = await createDeliverySite({
+        clientId: result.client.id,
+        name, address, city, province, postalCode, notes, isActive: 1
+      });
+      res.json({ success: true, id, message: `Site "${name}" ajouté` });
+    } catch (error) {
+      console.error('Erreur POST /api/sites:', error);
+      res.status(500).json({ error: 'Erreur serveur' });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

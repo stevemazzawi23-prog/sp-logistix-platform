@@ -106,6 +106,25 @@ export type DeliveryTicket = typeof deliveryTickets.$inferSelect;
 export type InsertDeliveryTicket = typeof deliveryTickets.$inferInsert;
 
 /**
+ * Delivery sites - physical delivery locations for each client
+ */
+export const deliverySites = mysqlTable("delivery_sites", {
+  id: int("id").autoincrement().primaryKey(),
+  clientId: int("clientId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  address: text("address"),
+  city: varchar("city", { length: 128 }),
+  province: varchar("province", { length: 64 }),
+  postalCode: varchar("postalCode", { length: 16 }),
+  notes: text("notes"),
+  isActive: int("isActive").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type DeliverySite = typeof deliverySites.$inferSelect;
+export type InsertDeliverySite = typeof deliverySites.$inferInsert;
+
+/**
  * Monthly reports - generated summaries per client per month
  */
 export const monthlyReports = mysqlTable("monthly_reports", {

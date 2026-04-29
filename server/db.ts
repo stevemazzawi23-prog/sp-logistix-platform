@@ -1,7 +1,7 @@
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, clients, contacts, deliveryTickets, deliveryUnits, monthlyReports } from "../drizzle/schema";
-import type { InsertClient, InsertContact, InsertDeliveryTicket, InsertDeliveryUnit, InsertMonthlyReport } from "../drizzle/schema";
+import { InsertUser, users, clients, contacts, deliveryTickets, deliveryUnits, monthlyReports, deliverySites } from "../drizzle/schema";
+import type { InsertClient, InsertContact, InsertDeliveryTicket, InsertDeliveryUnit, InsertMonthlyReport, InsertDeliverySite } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -284,6 +284,44 @@ export async function deleteDeliveryUnit(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.delete(deliveryUnits).where(eq(deliveryUnits.id, id));
+}
+
+// ============ DELIVERY SITES HELPERS ============
+
+export async function getSitesByClientId(clientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(deliverySites).where(eq(deliverySites.clientId, clientId));
+}
+
+export async function getSitesByClientCode(clientCode: string): Promise<{ client: typeof clients.$inferSelect; sites: (typeof deliverySites.$inferSelect)[] } | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const clientRows = await db.select().from(clients).where(eq(clients.code, clientCode));
+  if (!clientRows.length) return null;
+  const sites = await db.select().from(deliverySites).where(
+    and(eq(deliverySites.clientId, clientRows[0].id), eq(deliverySites.isActive, 1))
+  );
+  return { client: clientRows[0], sites };
+}
+
+export async function createDeliverySite(data: Omit<InsertDeliverySite, 'id' | 'createdAt'>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(deliverySites).values(data);
+  return result[0].insertId;
+}
+
+export async function updateDeliverySite(id: number, data: Partial<Omit<InsertDeliverySite, 'id' | 'clientId' | 'createdAt'>>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(deliverySites).set(data).where(eq(deliverySites.id, id));
+}
+
+export async function deleteDeliverySite(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(deliverySites).where(eq(deliverySites.id, id));
 }
 
 // ============ MONTHLY REPORT HELPERS ============
