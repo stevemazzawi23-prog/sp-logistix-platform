@@ -1,7 +1,7 @@
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, clients, contacts, deliveryTickets, deliveryUnits, monthlyReports, deliverySites } from "../drizzle/schema";
-import type { InsertClient, InsertContact, InsertDeliveryTicket, InsertDeliveryUnit, InsertMonthlyReport, InsertDeliverySite } from "../drizzle/schema";
+import { InsertUser, users, clients, contacts, deliveryTickets, deliveryUnits, monthlyReports, deliverySites, clientUnits } from "../drizzle/schema";
+import type { InsertClient, InsertContact, InsertDeliveryTicket, InsertDeliveryUnit, InsertMonthlyReport, InsertDeliverySite, InsertClientUnit } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -421,4 +421,44 @@ export async function upsertMonthlyReport(data: InsertMonthlyReport) {
       generatedAt: new Date(),
     },
   });
+}
+
+// ============ CLIENT UNITS HELPERS ============
+
+export async function getClientUnitsByClientId(clientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(clientUnits)
+    .where(and(eq(clientUnits.clientId, clientId), eq(clientUnits.isActive, 1)))
+    .orderBy(clientUnits.sortOrder, clientUnits.unitName);
+}
+
+export async function getClientUnitsByClientCode(clientCode: string): Promise<{ client: typeof clients.$inferSelect; units: (typeof clientUnits.$inferSelect)[] } | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const clientRows = await db.select().from(clients).where(eq(clients.code, clientCode));
+  if (!clientRows.length) return null;
+  const units = await db.select().from(clientUnits).where(
+    and(eq(clientUnits.clientId, clientRows[0].id), eq(clientUnits.isActive, 1))
+  ).orderBy(clientUnits.sortOrder, clientUnits.unitName);
+  return { client: clientRows[0], units };
+}
+
+export async function createClientUnit(data: Omit<InsertClientUnit, 'id' | 'createdAt'>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(clientUnits).values(data);
+  return result[0].insertId;
+}
+
+export async function updateClientUnit(id: number, data: Partial<Omit<InsertClientUnit, 'id' | 'clientId' | 'createdAt'>>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(clientUnits).set(data).where(eq(clientUnits.id, id));
+}
+
+export async function deleteClientUnit(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(clientUnits).where(eq(clientUnits.id, id));
 }

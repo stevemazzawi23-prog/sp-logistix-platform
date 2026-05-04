@@ -163,6 +163,52 @@ async function startServer() {
     }
   });
 
+  // Endpoint public pour récupérer les unités d'un client (APK)
+  app.get('/api/units/:clientCode', async (req, res) => {
+    try {
+      const apiToken = req.headers['x-api-token'] || req.query.token;
+      const validToken = process.env.APK_SYNC_TOKEN || 'default-token-change-me';
+      if (apiToken !== validToken) {
+        return res.status(401).json({ error: 'Token API invalide' });
+      }
+      const { getClientUnitsByClientCode } = await import('../db');
+      const result = await getClientUnitsByClientCode(req.params.clientCode);
+      if (!result) {
+        return res.status(404).json({ error: `Client ${req.params.clientCode} non trouvé` });
+      }
+      res.json({ success: true, clientName: result.client.name, units: result.units });
+    } catch (error) {
+      console.error('Erreur /api/units:', error);
+      res.status(500).json({ error: 'Erreur serveur' });
+    }
+  });
+
+  // Endpoint public pour ajouter une unité depuis l'APK
+  app.post('/api/units/:clientCode', async (req, res) => {
+    try {
+      const apiToken = req.headers['x-api-token'] || req.body.apiToken;
+      const validToken = process.env.APK_SYNC_TOKEN || 'default-token-change-me';
+      if (apiToken !== validToken) {
+        return res.status(401).json({ error: 'Token API invalide' });
+      }
+      const { unitName, description, sortOrder } = req.body;
+      if (!unitName) return res.status(400).json({ error: 'Le nom de l\'unité est requis' });
+      const { getClientUnitsByClientCode, createClientUnit } = await import('../db');
+      const result = await getClientUnitsByClientCode(req.params.clientCode);
+      if (!result) {
+        return res.status(404).json({ error: `Client ${req.params.clientCode} non trouvé` });
+      }
+      const id = await createClientUnit({
+        clientId: result.client.id,
+        unitName, description, sortOrder: sortOrder || 0, isActive: 1
+      });
+      res.json({ success: true, id, message: `Unité "${unitName}" ajoutée` });
+    } catch (error) {
+      console.error('Erreur POST /api/units:', error);
+      res.status(500).json({ error: 'Erreur serveur' });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

@@ -43,6 +43,13 @@
       "when": 1777493362943,
       "tag": "0005_stiff_proudstar",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1777909441866,
+      "tag": "0006_free_franklin_richards",
+      "breakpoints": true
     }
   ]
 }

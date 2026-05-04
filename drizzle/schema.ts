@@ -125,6 +125,23 @@ export type DeliverySite = typeof deliverySites.$inferSelect;
 export type InsertDeliverySite = typeof deliverySites.$inferInsert;
 
 /**
+ * Client units - list of named units (tanks/containers) belonging to a client
+ * Used to pre-populate the unit list during a delivery in the mobile app
+ */
+export const clientUnits = mysqlTable("client_units", {
+  id: int("id").autoincrement().primaryKey(),
+  clientId: int("clientId").notNull(),
+  unitName: varchar("unitName", { length: 255 }).notNull(),
+  description: text("description"),
+  sortOrder: int("sortOrder").default(0),
+  isActive: int("isActive").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ClientUnit = typeof clientUnits.$inferSelect;
+export type InsertClientUnit = typeof clientUnits.$inferInsert;
+
+/**
  * Monthly reports - generated summaries per client per month
  */
 export const monthlyReports = mysqlTable("monthly_reports", {

@@ -12,7 +12,8 @@ import {
   getUnitsByTicketId, createDeliveryUnit, deleteDeliveryUnit,
   getTicketById,
   getSitesByClientId, createDeliverySite, updateDeliverySite, deleteDeliverySite,
-  getUnitReportByClient
+  getUnitReportByClient,
+  getClientUnitsByClientId, createClientUnit, updateClientUnit, deleteClientUnit
 } from "./db";
 import bcrypt from "bcryptjs";
 import { sdk } from "./_core/sdk";
@@ -405,6 +406,44 @@ export const appRouter = router({
     }),
     delete: adminProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
       await deleteDeliverySite(input.id);
+      return { success: true };
+    }),
+  }),
+
+  // ============ CLIENT UNITS (liste d'unités par client) ============
+  clientUnits: router({
+    listByClient: protectedProcedure.input(z.object({ clientId: z.number() })).query(async ({ input, ctx }) => {
+      // Le client ne peut voir que ses propres unités
+      if (ctx.user.role !== 'admin') {
+        const myClient = await getClientByUserId(ctx.user.id);
+        if (!myClient || myClient.id !== input.clientId) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Accès refusé' });
+        }
+      }
+      return getClientUnitsByClientId(input.clientId);
+    }),
+    create: adminProcedure.input(z.object({
+      clientId: z.number(),
+      unitName: z.string().min(1),
+      description: z.string().optional(),
+      sortOrder: z.number().optional(),
+    })).mutation(async ({ input }) => {
+      const id = await createClientUnit({ ...input, isActive: 1 });
+      return { id, success: true };
+    }),
+    update: adminProcedure.input(z.object({
+      id: z.number(),
+      unitName: z.string().min(1).optional(),
+      description: z.string().optional(),
+      sortOrder: z.number().optional(),
+      isActive: z.number().optional(),
+    })).mutation(async ({ input }) => {
+      const { id, ...data } = input;
+      await updateClientUnit(id, data);
+      return { success: true };
+    }),
+    delete: adminProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
+      await deleteClientUnit(input.id);
       return { success: true };
     }),
   }),

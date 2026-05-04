@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Plus, Pencil, Trash2, Phone, Mail, User, MapPin, Building2 } from "lucide-react";
+import { Users, Plus, Pencil, Trash2, Phone, Mail, User, MapPin, Building2, Container } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -84,6 +84,18 @@ const emptySiteForm: SiteForm = {
   notes: "",
 };
 
+type UnitForm = {
+  unitName: string;
+  description: string;
+  sortOrder: number;
+};
+
+const emptyUnitForm: UnitForm = {
+  unitName: "",
+  description: "",
+  sortOrder: 0,
+};
+
 function AdminClientsContent() {
   const utils = trpc.useUtils();
   const { data: clients, isLoading } = trpc.clients.list.useQuery();
@@ -102,6 +114,12 @@ function AdminClientsContent() {
   const [siteForm, setSiteForm] = useState<SiteForm>(emptySiteForm);
   const [siteClientId, setSiteClientId] = useState<number | null>(null);
   const [editingSiteId, setEditingSiteId] = useState<number | null>(null);
+
+  // Unit state
+  const [unitDialogOpen, setUnitDialogOpen] = useState(false);
+  const [unitForm, setUnitForm] = useState<UnitForm>(emptyUnitForm);
+  const [unitClientId, setUnitClientId] = useState<number | null>(null);
+  const [editingUnitId, setEditingUnitId] = useState<number | null>(null);
 
   const createMutation = trpc.clients.create.useMutation({
     onSuccess: () => {
@@ -184,6 +202,36 @@ function AdminClientsContent() {
     onError: (err) => toast.error(err.message),
   });
 
+  const createUnitMutation = trpc.clientUnits.create.useMutation({
+    onSuccess: () => {
+      if (unitClientId) utils.clientUnits.listByClient.invalidate({ clientId: unitClientId });
+      setUnitDialogOpen(false);
+      setUnitForm(emptyUnitForm);
+      setEditingUnitId(null);
+      toast.success("Unité ajoutée");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateUnitMutation = trpc.clientUnits.update.useMutation({
+    onSuccess: () => {
+      if (unitClientId) utils.clientUnits.listByClient.invalidate({ clientId: unitClientId });
+      setUnitDialogOpen(false);
+      setUnitForm(emptyUnitForm);
+      setEditingUnitId(null);
+      toast.success("Unité mise à jour");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deleteUnitMutation = trpc.clientUnits.delete.useMutation({
+    onSuccess: () => {
+      if (unitClientId) utils.clientUnits.listByClient.invalidate({ clientId: unitClientId });
+      toast.success("Unité supprimée");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingId) {
@@ -225,6 +273,16 @@ function AdminClientsContent() {
       updateSiteMutation.mutate({ id: editingSiteId, ...siteForm });
     } else {
       createSiteMutation.mutate({ clientId: siteClientId, ...siteForm });
+    }
+  };
+
+  const handleUnitSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!unitClientId) return;
+    if (editingUnitId) {
+      updateUnitMutation.mutate({ id: editingUnitId, ...unitForm });
+    } else {
+      createUnitMutation.mutate({ clientId: unitClientId, ...unitForm });
     }
   };
 
@@ -365,6 +423,28 @@ function AdminClientsContent() {
                   deleteSiteMutation.mutate({ id: siteId });
                 }
               }}
+              onAddUnit={() => {
+                setUnitClientId(client.id);
+                setUnitForm(emptyUnitForm);
+                setEditingUnitId(null);
+                setUnitDialogOpen(true);
+              }}
+              onEditUnit={(unit: any) => {
+                setUnitClientId(client.id);
+                setEditingUnitId(unit.id);
+                setUnitForm({
+                  unitName: unit.unitName,
+                  description: unit.description || "",
+                  sortOrder: unit.sortOrder || 0,
+                });
+                setUnitDialogOpen(true);
+              }}
+              onDeleteUnit={(unitId: number) => {
+                setUnitClientId(client.id);
+                if (confirm("Supprimer cette unité ?")) {
+                  deleteUnitMutation.mutate({ id: unitId });
+                }
+              }}
             />
           ))}
         </div>
@@ -413,6 +493,50 @@ function AdminClientsContent() {
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setContactDialogOpen(false)}>Annuler</Button>
               <Button type="submit" disabled={createContactMutation.isPending} className="bg-primary text-primary-foreground">Ajouter</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unit Dialog */}
+      <Dialog open={unitDialogOpen} onOpenChange={setUnitDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingUnitId ? "Modifier l'unité" : "Ajouter une unité"}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUnitSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Nom de l'unité *</Label>
+              <Input
+                value={unitForm.unitName}
+                onChange={(e) => setUnitForm({ ...unitForm, unitName: e.target.value })}
+                required
+                placeholder="Ex: Unité 12, Réservoir A, Cuve 3..."
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Description (optionnel)</Label>
+              <Input
+                value={unitForm.description}
+                onChange={(e) => setUnitForm({ ...unitForm, description: e.target.value })}
+                placeholder="Capacité, emplacement, notes..."
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Ordre d'affichage</Label>
+              <Input
+                type="number"
+                value={unitForm.sortOrder}
+                onChange={(e) => setUnitForm({ ...unitForm, sortOrder: parseInt(e.target.value) || 0 })}
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground">Les unités sont triées par ordre croissant, puis par nom.</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setUnitDialogOpen(false)}>Annuler</Button>
+              <Button type="submit" disabled={createUnitMutation.isPending || updateUnitMutation.isPending} className="bg-primary text-primary-foreground">
+                {editingUnitId ? "Mettre à jour" : "Ajouter"}
+              </Button>
             </div>
           </form>
         </DialogContent>
@@ -468,6 +592,7 @@ function ClientCard({
   client, expanded, onToggle, onEdit, onDelete,
   onAddContact, onDeleteContact,
   onAddSite, onEditSite, onDeleteSite,
+  onAddUnit, onEditUnit, onDeleteUnit,
 }: {
   client: any;
   expanded: boolean;
@@ -479,9 +604,13 @@ function ClientCard({
   onAddSite: () => void;
   onEditSite: (site: any) => void;
   onDeleteSite: (id: number) => void;
+  onAddUnit: () => void;
+  onEditUnit: (unit: any) => void;
+  onDeleteUnit: (id: number) => void;
 }) {
   const { data: contacts } = trpc.contacts.listByClient.useQuery({ clientId: client.id }, { enabled: expanded });
   const { data: sites } = trpc.sites.listByClient.useQuery({ clientId: client.id }, { enabled: expanded });
+  const { data: clientUnitsList } = trpc.clientUnits.listByClient.useQuery({ clientId: client.id }, { enabled: expanded });
 
   return (
     <Card>
@@ -498,6 +627,12 @@ function ClientCard({
                 <Badge variant="outline" className="text-xs gap-1 border-[#1a5f3f]/40 text-[#1a5f3f]">
                   <MapPin className="h-3 w-3" />
                   {sites.length} site{sites.length > 1 ? "s" : ""}
+                </Badge>
+              )}
+              {clientUnitsList && clientUnitsList.length > 0 && (
+                <Badge variant="outline" className="text-xs gap-1 border-blue-500/40 text-blue-600">
+                  <Container className="h-3 w-3" />
+                  {clientUnitsList.length} unité{clientUnitsList.length > 1 ? "és" : "é"}
                 </Badge>
               )}
             </div>
@@ -527,12 +662,19 @@ function ClientCard({
             </div>
 
             <Tabs defaultValue="sites" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="sites" className="gap-1.5">
                   <MapPin className="h-3.5 w-3.5" />
                   Sites de livraison
                   {sites && sites.length > 0 && (
                     <span className="ml-1 bg-[#1a5f3f] text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{sites.length}</span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="units" className="gap-1.5">
+                  <Container className="h-3.5 w-3.5" />
+                  Unités
+                  {clientUnitsList && clientUnitsList.length > 0 && (
+                    <span className="ml-1 bg-blue-600 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{clientUnitsList.length}</span>
                   )}
                 </TabsTrigger>
                 <TabsTrigger value="contacts" className="gap-1.5">
@@ -587,6 +729,47 @@ function ClientCard({
                   <div className="text-center py-6 text-muted-foreground border border-dashed rounded-lg">
                     <MapPin className="h-6 w-6 mx-auto mb-1.5 opacity-30" />
                     <p className="text-xs">Aucun site de livraison. Cliquez sur "Ajouter un site".</p>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* UNITS TAB */}
+              <TabsContent value="units" className="mt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-muted-foreground">Unités pré-configurées pour ce client (visibles dans l'APK lors d'une livraison)</p>
+                  <Button variant="outline" size="sm" onClick={onAddUnit} className="gap-1 border-blue-500/40 text-blue-600 hover:bg-blue-50">
+                    <Plus className="h-3 w-3" />
+                    Ajouter une unité
+                  </Button>
+                </div>
+                {clientUnitsList && clientUnitsList.length > 0 ? (
+                  <div className="space-y-2">
+                    {clientUnitsList.map((unit) => (
+                      <div key={unit.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-blue-50/30 text-sm">
+                        <div className="flex items-center gap-2.5">
+                          <Container className="h-4 w-4 text-blue-600 shrink-0" />
+                          <div>
+                            <p className="font-semibold text-foreground">{unit.unitName}</p>
+                            {unit.description && (
+                              <p className="text-muted-foreground text-xs mt-0.5">{unit.description}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-1 shrink-0 ml-2">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditUnit(unit)}>
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => onDeleteUnit(unit.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-muted-foreground border border-dashed rounded-lg">
+                    <Container className="h-6 w-6 mx-auto mb-1.5 opacity-30" />
+                    <p className="text-xs">Aucune unité configurée. Cliquez sur "Ajouter une unité".</p>
                   </div>
                 )}
               </TabsContent>
