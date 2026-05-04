@@ -286,6 +286,82 @@ export async function deleteDeliveryUnit(id: number) {
   await db.delete(deliveryUnits).where(eq(deliveryUnits.id, id));
 }
 
+/**
+ * Rapport par unité : retourne tous les remplissages d'un client
+ * groupés par nom d'unité, avec date et litres pour chaque remplissage.
+ * Filtre optionnel par année et mois.
+ */
+export async function getUnitReportByClient(
+  clientId: number,
+  year?: number,
+  month?: number
+): Promise<Array<{ unitName: string; totalLiters: number; fills: Array<{ date: Date; liters: number; ticketNumber: string; ticketId: number }> }>> {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Récupérer tous les tickets du client dans la période
+  let tickets;
+  if (year && month) {
+    tickets = await getTicketsByClientIdAndMonth(clientId, year, month);
+  } else if (year) {
+    // Toute l'année
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31, 23, 59, 59);
+    tickets = await db.select().from(deliveryTickets).where(
+      and(
+        eq(deliveryTickets.clientId, clientId),
+        gte(deliveryTickets.deliveryDate, startDate),
+        lte(deliveryTickets.deliveryDate, endDate)
+      )
+    );
+  } else {
+    tickets = await db.select().from(deliveryTickets).where(eq(deliveryTickets.clientId, clientId));
+  }
+
+  if (!tickets.length) return [];
+
+  // Récupérer toutes les unités pour ces tickets
+  const ticketIds = tickets.map((t: any) => t.id);
+  const allUnits: Array<typeof deliveryUnits.$inferSelect> = [];
+  for (const ticketId of ticketIds) {
+    const units = await db.select().from(deliveryUnits).where(eq(deliveryUnits.ticketId, ticketId));
+    allUnits.push(...units);
+  }
+
+  if (!allUnits.length) return [];
+
+  // Construire un index ticket par id
+  const ticketMap = new Map(tickets.map((t: any) => [t.id, t]));
+
+  // Grouper par unitName
+  const grouped = new Map<string, { totalLiters: number; fills: Array<{ date: Date; liters: number; ticketNumber: string; ticketId: number }> }>();
+  for (const unit of allUnits) {
+    const ticket = ticketMap.get(unit.ticketId);
+    if (!ticket) continue;
+    const liters = parseFloat(unit.liters as string || '0');
+    if (!grouped.has(unit.unitName)) {
+      grouped.set(unit.unitName, { totalLiters: 0, fills: [] });
+    }
+    const entry = grouped.get(unit.unitName)!;
+    entry.totalLiters += liters;
+    entry.fills.push({
+      date: new Date(ticket.deliveryDate),
+      liters,
+      ticketNumber: ticket.ticketNumber,
+      ticketId: ticket.id,
+    });
+  }
+
+  // Trier les remplissages par date et retourner trié par nom d'unité
+  return Array.from(grouped.entries())
+    .map(([unitName, data]) => ({
+      unitName,
+      totalLiters: data.totalLiters,
+      fills: data.fills.sort((a, b) => a.date.getTime() - b.date.getTime()),
+    }))
+    .sort((a, b) => a.unitName.localeCompare(b.unitName, 'fr'));
+}
+
 // ============ DELIVERY SITES HELPERS ============
 
 export async function getSitesByClientId(clientId: number) {

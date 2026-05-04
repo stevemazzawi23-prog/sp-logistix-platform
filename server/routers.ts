@@ -11,7 +11,8 @@ import {
   getUserByEmail, createUserWithPassword, updateUserPassword, updateUserRole, deleteUser, getAllUsers,
   getUnitsByTicketId, createDeliveryUnit, deleteDeliveryUnit,
   getTicketById,
-  getSitesByClientId, createDeliverySite, updateDeliverySite, deleteDeliverySite
+  getSitesByClientId, createDeliverySite, updateDeliverySite, deleteDeliverySite,
+  getUnitReportByClient
 } from "./db";
 import bcrypt from "bcryptjs";
 import { sdk } from "./_core/sdk";
@@ -336,6 +337,20 @@ export const appRouter = router({
   reports: router({
     listByClient: protectedProcedure.input(z.object({ clientId: z.number() })).query(async ({ input }) => {
       return getMonthlyReportsByClientId(input.clientId);
+    }),
+    byUnit: protectedProcedure.input(z.object({
+      clientId: z.number(),
+      year: z.number().optional(),
+      month: z.number().optional(),
+    })).query(async ({ input, ctx }) => {
+      // Le client ne peut voir que ses propres données
+      if (ctx.user.role !== 'admin') {
+        const myClient = await getClientByUserId(ctx.user.id);
+        if (!myClient || myClient.id !== input.clientId) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Accès refusé' });
+        }
+      }
+      return getUnitReportByClient(input.clientId, input.year, input.month);
     }),
     generate: adminProcedure.input(z.object({
       clientId: z.number(),
